@@ -5,7 +5,7 @@
     <key>CFBundleIdentifier</key>
     <string>com.plexapp.plugins.tested</string>
     <key>PlexClientPlatforms</key>
-    <string>MacOSX,iOS,Android,LGTV</string>
+    <string>MacOSX,iOS,Android,LGTV,Windows</string>
     <key>PlexFrameworkVersion</key>
     <string>2</string>
     <key>PlexPluginClass</key>

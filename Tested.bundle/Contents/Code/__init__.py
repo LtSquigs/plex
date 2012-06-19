@@ -1,48 +1,30 @@
-API_PATH = 'http://api.tested.com'
-API_KEY = '060b7347a9f8e317a1a9efceea0f8b70bf7018f6'
-
 ART = 'art-default.png'
 ICON = 'icon-default.png'
 
-def ValidatePrefs():
-    link_code = Prefs['link_code'].upper()
-    if link_code and len(link_code) == 6:
-        response = JSON.ObjectFromURL(API_PATH + '/validate?link_code=' + link_code + '&format=json')
-        if 'api_key' in response:
-            Dict['api_key'] = response['api_key']
-            Dict.Save()
-
 @handler('/video/tested', 'Tested')
 def MainMenu():
-    if 'api_key' in Dict:
-        global API_KEY
-        API_KEY = Dict['api_key']
-
     oc = ObjectContainer()
 
     # Live stream
-    response = JSON.ObjectFromURL(API_PATH + '/chats/?api_key=' + API_KEY + '&format=json')
+    LIVE_CHANNEL = 'tested'
+    
+    response = JSON.ObjectFromURL('http://api.justin.tv/api/stream/list.json?channel=' + LIVE_CHANNEL)
 
-    if response['status_code'] == 100:
-        # Revert to the default key
-        Dict.Reset()
-        Dict.Save()
-
-    chats = response['results']
-    for chat in chats:
-        url = 'http://www.justin.tv/widgets/live_embed_player.swf?channel=' + chat['channel_name'] + '&auto_play=true&start_volume=25'
-        if chat['password']:
-            url += '&publisherGuard=' + chat['password']
-
+    if( len(response) > 0): # One or more live streams
+        stream = response[0]
+        
+        url = 'http://www.justin.tv/widgets/live_embed_player.swf?channel=' + LIVE_CHANNEL + '&auto_play=true&start_volume=25'
+        title = stream['title']
+        thumbnail = stream['channel']['screen_cap_url_huge']
+        
         oc.add(
             VideoClipObject(
                 key=WebVideoURL(url),
-                title='LIVE: ' + chat['title'],
-                summary=chat['deck'],
+                title='LIVE: ' + title,
                 source_title='Justin.tv',
-                thumb=chat['image']['super_url'],
+                thumb=thumbnail,
                 art=R(ART),
-                rating_key=chat['channel_name']
+                rating_key=LIVE_CHANNEL
             )
         )
 
@@ -55,15 +37,23 @@ def MainMenu():
             art=R(ART)
         )
     )
-
-    categories = JSON.ObjectFromURL(API_PATH + '/video_types/?api_key=' + API_KEY + '&format=json')['results']
-
+    
+    #only can have 7 of these maybe
+    categories =    [ 
+                        ('Science & Technology', 'Tech'),
+                        ('Reviews', 'review'),
+                        ('App Of The Day', 'app,of,the,day'),
+                        ('DIY', 'diy'),
+                        ('Coffee', 'coffee'),
+                        ('Howtos', 'howto'),
+                        ('Makerbot', 'makerbot')
+                    ]
     for cat in categories:
         oc.add(
             DirectoryObject(
-                key='/video/tested/videos/?cat_id=' + str(cat['id']),
-                title=cat['name'],
-                summary=cat['deck'],
+                key='/video/tested/videos/?cat_id=' + str(cat[1]),
+                title=cat[0],
+                summary='',
                 thumb=R(ICON),
                 art=R(ART)
             )
@@ -79,59 +69,120 @@ def MainMenu():
         )
     )
 
-    oc.add(
-        PrefsObject(
-            title='Preferences',
-            thumb=R(ICON),
-            art=R(ART)
-        )
-    )
-
     return oc
-
+    
 @route('/video/tested/videos')
-def Videos(cat_id=None, query=None):
-    if 'api_key' in Dict:
-        global API_KEY
-        API_KEY = Dict['api_key']
+def Videos(cat_id=None, query=None, page = 1):
+
+    page = int(page)
+
+    if query == '':
+        query = None
+        
+    if cat_id == '':
+        cat_id = None
+
+    MAXRESULTS = 20
 
     oc = ObjectContainer()
 
+    Log(str(page))
+    url_suffix = '&start-index=' + str((page - 1) * MAXRESULTS + 1)
+    url_suffix += '&max-results=' + str(MAXRESULTS)
+    
     if query:
-        videos = JSON.ObjectFromURL(API_PATH + '/search/?api_key=' + API_KEY + '&resources=video&query=' + query + '&format=json')['results']
+        videos = JSON.ObjectFromURL('http://gdata.youtube.com/feeds/api/videos?alt=json&author=testedcom&prettyprint=true&v=2' + url_suffix + '&q=' + query.replace(' ', '%20'))
     elif cat_id:
-        videos = JSON.ObjectFromURL(API_PATH + '/videos/?api_key=' + API_KEY + '&video_type=' + cat_id + '&sort=-publish_date&format=json')['results']
+        videos = JSON.ObjectFromURL('http://gdata.youtube.com/feeds/api/videos?alt=json&author=testedcom&prettyprint=true&v=2' + url_suffix + '&orderby=published&category=' + cat_id)
     else:
-        videos = JSON.ObjectFromURL(API_PATH + '/videos/?api_key=' + API_KEY + '&sort=-publish_date&format=json')['results']
+        videos = JSON.ObjectFromURL('https://gdata.youtube.com/feeds/api/users/testedcom/uploads?alt=json&prettyprint=true&v=2' + url_suffix )
 
-    if Prefs['quality'] == 'Auto':
-        if 'hd_url' in videos[0]:
-            quality = 'hd_url'
-        else:
-            quality = 'high_url'
-    else:
-        quality = Prefs['quality'].lower() + '_url'
+  
+    if videos['feed'].has_key('entry'):
+    
+        for video in videos['feed']['entry']:
+        
+            if CheckRejectedEntry(video):
+                continue
+                
+            video_url = None
+            for video_links in video['link']:
+                if video_links['type'] == 'text/html':
+                    video_url = video_links['href']
+                    break
+                
+            if video_url is None:
+                Log('Found video that had no URL')
+                continue
+                 
+            video_title = video['media$group']['media$title']['$t']
+            thumb = video['media$group']['media$thumbnail'][2]['url']
+            duration = int(video['media$group']['yt$duration']['seconds']) * 1000  
 
-    for vid in videos:
-        if 'wallpaper_image' not in vid or not vid['wallpaper_image']: # or whatever it gets called
-            vid_art = R(ART)
-        else:
-            vid_art = vid['wallpaper_image']
+            summary = None
+            try: summary = video['media$group']['media$description']['$t']
+            except: pass 
 
-        if quality == 'hd_url':
-            url = vid[quality] + '&api_key=' + API_KEY
-        else:
-            url = vid[quality]
+            rating = None
+            try: rating = float(video['gd$rating']['average']) * 2
+            except: pass
 
-        oc.add(
-                VideoClipObject(
-                    key=url,
-                    title=vid['name'],
-                    summary=vid['deck'],
-                    thumb=vid['image']['super_url'],
-                    art=vid_art,
-                    rating_key=vid['id']
-                )
-        )
+            date = None
+            try: date = Datetime.ParseDate(video['published']['$t'].split('T')[0])
+            except:
+                try: date = Datetime.ParseDate(video['updated']['$t'].split('T')[0])
+                except: pass
+                
+            oc.add(
+                    VideoClipObject(
+                        url=video_url + "&hd=1",
+                        title=video_title,
+                        summary=summary,
+                        thumb=Callback(GetThumb, url = thumb),
+                        art=R(ART),
+                        rating = rating,
+                        originally_available_at = date
+                    )
+            )
+        
+        if videos['feed'].has_key('openSearch$totalResults'):
+            total_results = int(videos['feed']['openSearch$totalResults']['$t'])
+            items_per_page = int(videos['feed']['openSearch$itemsPerPage']['$t'])
+            start_index = int(videos['feed']['openSearch$startIndex']['$t'])
+            
+            if not query:
+                query = ''
+               
+            if not cat_id:
+                cat_id = ''
+            
+            if (start_index + items_per_page) < total_results:
+                oc.add(DirectoryObject(key = Callback(Videos, cat_id = cat_id, query = query, page = page + 1), title = 'Next'))
 
     return oc
+
+def GetThumb(url):
+    try:
+        data = HTTP.Request(url, cacheTime = CACHE_1WEEK).content
+        return DataObject(data, 'image/jpeg')
+    except:
+        Log.Exception("Error when attempting to get the associated thumb")
+        return Redirect(R(ICON))
+        
+def CheckRejectedEntry(entry):
+    try:
+        status_name = entry['app$control']['yt$state']['name']
+
+        if status_name in ['deleted', 'rejected', 'failed']:
+            return True
+
+        if status_name == 'restricted':
+            status_reason = entry['app$control']['yt$state']['reasonCode']
+
+            if status_reason in ['private', 'requesterRegion']:
+                return True
+
+    except:
+        pass
+
+    return False
