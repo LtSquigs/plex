@@ -1,6 +1,17 @@
 ART = 'art-default.png'
 ICON = 'icon-default.png'
 
+LIVE_ICON = 'live.png'
+LATEST_ICON = 'latest.png'
+SCIENCE_ICON = 'science.png'
+REVIEW_ICON = 'review.png'
+APP_OF_THE_DAY_ICON = 'app-of-the-day.png'
+DIY_ICON = 'diy.png'
+COFFEE_ICON = 'coffee.png'
+HOWTO_ICON = 'howto.png'
+MAKERBOT_ICON = 'makerbot.png'
+SEARCH_ICON = 'search.png'
+
 @handler('/video/tested', 'Tested')
 def MainMenu():
     oc = ObjectContainer()
@@ -15,14 +26,13 @@ def MainMenu():
         
         url = 'http://www.justin.tv/widgets/live_embed_player.swf?channel=' + LIVE_CHANNEL + '&auto_play=true&start_volume=25'
         title = stream['title']
-        thumbnail = stream['channel']['screen_cap_url_huge']
         
         oc.add(
             VideoClipObject(
                 key=WebVideoURL(url),
                 title='LIVE: ' + title,
                 source_title='Justin.tv',
-                thumb=thumbnail,
+                thumb=R(LIVE_ICON),
                 art=R(ART),
                 rating_key=LIVE_CHANNEL
             )
@@ -32,21 +42,21 @@ def MainMenu():
         DirectoryObject(
             key='/video/tested/videos',
             title='Latest',
-            summary='Watch the newest stuff.',
-            thumb=R(ICON),
+            summary='',
+            thumb=R(LATEST_ICON),
             art=R(ART)
         )
     )
     
     #only can have 7 of these maybe
     categories =    [ 
-                        ('Science & Technology', 'Tech'),
-                        ('Reviews', 'review'),
-                        ('App Of The Day', 'app,of,the,day'),
-                        ('DIY', 'diy'),
-                        ('Coffee', 'coffee'),
-                        ('Howtos', 'howto'),
-                        ('Makerbot', 'makerbot')
+                        ('Science & Technology', 'Tech', '', R(SCIENCE_ICON)),
+                        ('Reviews', 'review', '', R(REVIEW_ICON)),
+                        ('App Of The Day', 'app,of,the,day', '', R(APP_OF_THE_DAY_ICON)),
+                        ('DIY', 'diy', '', R(DIY_ICON)),
+                        ('Coffee', 'coffee', '', R(COFFEE_ICON)),
+                        ('Howtos', 'howto', '', R(HOWTO_ICON)),
+                        ('Makerbot', 'makerbot', '', R(MAKERBOT_ICON))
                     ]
     for cat in categories:
         oc.add(
@@ -54,7 +64,7 @@ def MainMenu():
                 key='/video/tested/videos/?cat_id=' + str(cat[1]),
                 title=cat[0],
                 summary='',
-                thumb=R(ICON),
+                thumb=cat[3],
                 art=R(ART)
             )
         )
@@ -64,7 +74,7 @@ def MainMenu():
             key=Callback(Videos),
             title='Search',
             prompt='Search',
-            thumb=R(ICON),
+            thumb=R(SEARCH_ICON),
             art=R(ART)
         )
     )
